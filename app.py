@@ -2,52 +2,82 @@ import streamlit as st
 import google.generativeai as genai
 import os
 
-st.set_page_config(page_title="API 健檢中心", page_icon="🏥")
-st.title("🏥 API 鑰匙與環境健檢")
+# --- 頁面設定 ---
+st.set_page_config(page_title="聽力解題神器 (2026版)", page_icon="🎧")
 
-# 1. 檢查鑰匙是否存在
+# --- 安全的 API Key 讀取 ---
 if "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
-    st.success(f"✅ 步驟 1: 成功讀取到 Secrets 鑰匙 (開頭是: {api_key[:5]}...)")
-    genai.configure(api_key=api_key)
 else:
-    st.error("❌ 步驟 1 失敗: 找不到 API Key，請檢查 Secrets 設定。")
+    st.error("⚠️ 錯誤：找不到 API Key。請在 Streamlit Cloud 的 Secrets 欄位設定 GOOGLE_API_KEY。")
     st.stop()
 
-# 2. 檢查套件版本 (這很重要，舊版不支援 Flash)
-try:
-    import google.generativeai as ai_lib
-    version = ai_lib.__version__
-    st.info(f"ℹ️ 目前安裝的 google-generativeai 版本: {version}")
-except:
-    st.warning("無法偵測版本號")
+# 設定 Google AI
+genai.configure(api_key=api_key)
 
-# 3. 實際連線測試
-if st.button("🚀 開始連線測試"):
-    try:
-        st.write("正在詢問 Google 你的鑰匙能用哪些模型...")
-        
-        # 列出所有可用模型
-        available_models = []
-        for m in genai.list_models():
-            available_models.append(m.name)
-            
-        # 顯示清單
-        st.json(available_models)
-        
-        # 判斷結果
-        target_model = "models/gemini-1.5-flash"
-        
-        if target_model in available_models:
-            st.balloons()
-            st.success(f"🎉 恭喜！你的鑰匙 **支援** {target_model}！")
-            st.markdown("### 結論：")
-            st.markdown("既然鑰匙沒問題，那之前的錯誤 99% 是因為 `requirements.txt` 裡面的版本太舊。請記得去更新 requirements.txt。")
-        else:
-            st.error(f"❌ 慘！你的鑰匙清單裡 **找不到** {target_model}。")
-            st.markdown("### 結論：")
-            st.markdown("你的這把鑰匙權限不足 (可能是舊的 Cloud Key)。**請直接去 Google AI Studio 申請一把新的**，最快解決！")
+# --- APP 介面 ---
+st.title("🎧 英文聽力自動解題 (Gemini 2.5)")
+st.caption("目前使用模型：Gemini 2.5 Flash (最新極速版)")
 
-    except Exception as e:
-        st.error(f"❌ 連線發生致命錯誤：{e}")
-        st.markdown("這通常代表你的鑰匙無效，或是沒有開啟 API 權限。")
+# 1. 錄音區
+st.header("1. 錄製題目聲音")
+audio_input = st.audio_input("按下紅色麥克風開始錄音")
+
+if audio_input:
+    st.audio(audio_input)
+
+st.markdown("---")
+
+# 2. 拍照區
+st.header("2. 上傳選項照片")
+img_file = st.file_uploader("拍攝題目選項", type=["jpg", "png", "jpeg"])
+
+if img_file:
+    st.image(img_file, caption="題目預覽", use_container_width=True)
+
+st.markdown("---")
+
+# 3. 解題區
+if st.button("🔥 呼叫 AI 解題", type="primary"):
+    
+    if not audio_input or not img_file:
+        st.warning("請記得「錄音」並且「上傳照片」喔！")
+    else:
+        with st.spinner("Gemini 2.5 正在極速分析中..."):
+            try:
+                # 準備資料
+                image_bytes = img_file.getvalue()
+                audio_bytes = audio_input.getvalue()
+
+                # === 關鍵修改：使用你的清單裡有的 Gemini 2.5 Flash ===
+                model = genai.GenerativeModel('gemini-2.5-flash')
+
+                # 給 AI 的指令
+                prompt = """
+                你是一個英文檢定考試專家。
+                請參考附帶的【圖片】(考題選項) 以及【聲音】(聽力內容)。
+                
+                任務：
+                1. 聽聲音內容。
+                2. 看圖片中的選項。
+                3. 判斷哪個選項是正確答案。
+                
+                請回傳：
+                - 正確選項 (A/B/C/D)
+                - 聽力內容摘要 (英文原文+中文翻譯)
+                - 解析 (為什麼選這個答案)
+                """
+                
+                # 發送請求
+                response = model.generate_content([
+                    prompt,
+                    {"mime_type": "image/jpeg", "data": image_bytes},
+                    {"mime_type": "audio/wav", "data": audio_bytes}
+                ])
+                
+                # 顯示結果
+                st.success("分析完成！")
+                st.markdown(response.text)
+
+            except Exception as e:
+                st.error(f"發生錯誤：{e}")
