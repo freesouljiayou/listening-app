@@ -3,14 +3,14 @@ import google.generativeai as genai
 import os
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="消防聽力特訓 (變焦版)", page_icon="🎧", layout="centered")
+st.set_page_config(page_title="消防聽力特訓 (極簡版)", page_icon="🎧", layout="centered")
 
 # ==========================================
 # 🎨 CSS 優化區
 # ==========================================
 st.markdown("""
     <style>
-    /* 1. 錄音區：全寬度，高度適中 */
+    /* 1. 錄音區：全寬度 */
     div[data-testid="stAudioInput"] {
         width: 100% !important;
         margin-top: 5px;
@@ -31,15 +31,14 @@ st.markdown("""
         border-radius: 15px;
         border: none;
         box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
-        margin: 10px 0px;
+        margin: 15px 0px;
     }
     
-    /* 3. 上傳區文字優化 */
-    .upload-label {
+    /* 3. 上傳區說明文字 */
+    .upload-hint {
         text-align: center;
-        font-weight: 600;
-        color: #444;
         font-size: 14px;
+        color: #666;
         margin-bottom: 5px;
     }
     </style>
@@ -66,31 +65,19 @@ audio_input = st.audio_input("點擊錄音")
 # --- 2. 中間：解題按鈕 ---
 start_button = st.button("🚀 呼叫 AI 解題")
 
-# 【關鍵修改 1】在這裡建立一個「空的容器」，專門用來放等一下的答案
-# 這樣答案就會出現在按鈕正下方，而不是最下面
+# 【答案顯示區】放在按鈕正下方
 result_container = st.container()
 
 st.markdown("---")
 
-# --- 3. 最下面：照片區 (改回原生相機模式) ---
+# --- 3. 最下面：照片區 (整合版) ---
 st.markdown("### 2. 提供題目")
 
-col1, col2 = st.columns(2)
+st.markdown("<div class='upload-hint'>👇 點擊下方框框 -> 選擇「拍照」或是「圖庫」</div>", unsafe_allow_html=True)
 
-with col1:
-    # 【關鍵修改 2】左邊改回 file_uploader，但標示為拍照
-    # 在手機上點這個，系統會問你要「拍照」還是「選檔案」
-    # 選「拍照」就能使用手機原生相機 (可變焦！)
-    st.markdown("<div class='upload-label'>📸 拍照 (可變焦)</div>", unsafe_allow_html=True)
-    # key="cam" 是為了跟右邊區隔
-    camera_file = st.file_uploader("拍照", type=["jpg", "png", "jpeg"], label_visibility="collapsed", key="cam")
+# 這裡合併成一個單一的上傳元件
+img_file = st.file_uploader("上傳題目", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
 
-with col2:
-    st.markdown("<div class='upload-label'>📂 上傳舊檔</div>", unsafe_allow_html=True)
-    upload_file = st.file_uploader("上傳", type=["jpg", "png", "jpeg"], label_visibility="collapsed", key="file")
-
-# 邏輯：優先讀取左邊，沒有才讀右邊
-final_image = camera_file if camera_file else upload_file
 
 # ==========================================
 # 🧠 AI 處理邏輯
@@ -100,15 +87,15 @@ if start_button:
     # 檢查是否缺資料
     if not audio_input:
         st.warning("⚠️ 請先錄音！")
-    elif not final_image:
-        st.warning("⚠️ 請提供照片！(點擊下方按鈕 -> 選擇相機 -> 即可變焦拍攝)")
+    elif not img_file:
+        st.warning("⚠️ 請提供照片！(點擊下方框框 -> 選擇相機即可變焦)")
     else:
-        # 使用剛剛建立的容器 (result_container) 來顯示進度與結果
+        # 使用容器顯示結果
         with result_container:
             with st.spinner("Gemini 2.5 正在分析中..."):
                 try:
                     # 準備資料
-                    image_bytes = final_image.getvalue()
+                    image_bytes = img_file.getvalue()
                     audio_bytes = audio_input.getvalue()
 
                     # 使用 Gemini 2.5 Flash
@@ -135,7 +122,7 @@ if start_button:
                         {"mime_type": "audio/wav", "data": audio_bytes}
                     ])
                     
-                    # 顯示結果 (這會出現在按鈕正下方！)
+                    # 顯示結果
                     st.success("✅ 分析完成！")
                     st.markdown(response.text)
 
